@@ -1,8 +1,22 @@
+'use client'
+
+import { useRouter } from "next/navigation";
+
 interface NudleLogoProps {
     size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
+    redirect?: string
 }
 
-export default function NudleLogo({ size = 'md' }: NudleLogoProps) {
+export default function NudleLogo({ size = 'md', redirect = '/' }: NudleLogoProps) {
+    const router = useRouter()
+    const redirectEnabled = (redirect != '')
+
+    const handleRedirect = () => {
+        if (redirectEnabled) {
+            router.push(redirect)
+        }
+    }
+
     const sizeClasses = {
         sm: 'text-2xl',
         md: 'text-4xl',
@@ -20,7 +34,8 @@ export default function NudleLogo({ size = 'md' }: NudleLogoProps) {
     };
 
     return (
-        <div className={`w-auto h-auto flex flex-col ${spaceClasses[size]} items-center justify-center`}>
+        <div className={`w-auto h-auto flex flex-col ${spaceClasses[size]} items-center justify-center hover:cursor-default ${redirectEnabled && 'hover:cursor-pointer'}`}
+        onClick={handleRedirect}>
             <div className={`${sizeClasses[size]} font-nudle`}>
                 <span className="text-red-500">nu</span>
                 <span className="text-blue-500">d</span>

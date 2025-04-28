@@ -1,7 +1,28 @@
+'use client'
+
+import NudleLogo from "@/components/common/NudleLogo";
+import SearchBar from "@/components/common/SearchBar";
+import { useSearchParams } from "next/navigation";
+import { Cog } from "lucide-react";
+
 export default function Home() {
+    const searchParams = useSearchParams();
+    const query = searchParams.get('q') || '';  
+
     return (
         <main className="flex flex-col w-full min-h-screen text-white bg-background">
-            
+            <nav className="w-full justify-between items-center">
+                <div className="flex px-5 pb-2 w-full justify-between items-center">
+                    <div className="flex">
+                        <NudleLogo size="lg" />
+                        <SearchBar query={query}/>
+                    </div>
+                    <button className="flex items-center justify-center w-10 h-10 rounded-xl hover:bg-surface transition-colors text-secondary">
+                        <Cog />
+                    </button>
+                </div>
+                <div className="w-full h-1 bg-surface"></div>
+            </nav>
         </main>
     );
 }

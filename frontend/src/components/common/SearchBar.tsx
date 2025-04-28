@@ -36,7 +36,7 @@ export default function SearchBar({query = ''}: SearchProps) {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
                 />
-                <Search className="absolute right-4 text-secondary" onClick={handleSearch} size={20} />
+                <Search className="absolute right-4 text-secondary hover:cursor-pointer" onClick={handleSearch} size={20} />
             </div>
         </div>
     );

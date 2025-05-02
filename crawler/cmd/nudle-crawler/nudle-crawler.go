@@ -1,5 +1,0 @@
-package nudlecrawler
-
-func main() {
-	
-}

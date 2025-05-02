@@ -15,7 +15,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error connecting to database: {e}")
 
-    def ensure_structure(self) -> Exception | None:
+    def ensure_structure(self) -> None | Exception:
         try:
             cursor = self.conn.cursor()
 

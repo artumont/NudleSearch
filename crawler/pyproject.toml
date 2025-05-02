@@ -5,7 +5,7 @@ description = "Default template for PDM package"
 authors = [
     {name = "artumont", email = "197291181+artumont@users.noreply.github.com"},
 ]
-dependencies = []
+dependencies = ["beautifulsoup4>=4.13.4", "requests>=2.32.3"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}

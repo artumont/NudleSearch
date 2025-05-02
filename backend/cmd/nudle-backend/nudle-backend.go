@@ -1,4 +1,4 @@
-package nudlebackend
+package main
 
 func main() {
 

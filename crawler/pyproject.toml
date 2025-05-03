@@ -1,15 +1,27 @@
 [project]
 name = "NudleCrawler"
 version = "0.1.0"
-description = "Default template for PDM package"
+description = "A crawler for NudleSearch"
 authors = [
     {name = "artumont", email = "197291181+artumont@users.noreply.github.com"},
 ]
-dependencies = ["beautifulsoup4>=4.13.4", "httpx>=0.28.1"]
+dependencies = ["beautifulsoup4>=4.13.4", "httpx>=0.28.1", "pytest>=8.3.5", "setuptools>=80.1.0"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}
 
 
-[tool.pdm]
-distribution = false
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+]
+
+[build-system]
+requires = ["pdm-backend"]
+backend = "pdm.backend"
+
+[tool.pytest.ini_options]
+pythonpath = "."
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -3,7 +3,7 @@ import logging
 import httpx
 from enum import Enum
 from typing import List
-from exceptions import BridgeException, ProxyException
+from .exceptions import BridgeException, ProxyException
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class ConnectionManager:
             # @note: This will be fetching without a proxy
             else:
                 try:
-                    return self._post_disabled(url, data)
+                    return await self._post_disabled(url, data)
                 except Exception as e:
                     logger.error(f"Proxyless post request failed: {e}")
                     raise
@@ -117,16 +117,14 @@ class ConnectionManager:
         return response
 
     async def _get_proxy(self) -> str | Exception:
-        if self.proxy_type == ProxyTypes.STATIC:
-            return self.proxy_pool[0]
-
         start_idx = self.proxy_idx
         while True:
             proxy = self.proxy_pool[self.proxy_idx]
             self.proxy_idx = (self.proxy_idx + 1) % len(self.proxy_pool)
-            if self.proxy_idx == start_idx and not await self._check_proxy(proxy):
+            proxy_check = await self._check_proxy(proxy)
+            if self.proxy_idx == start_idx and not proxy_check:
                 raise ProxyException("No working proxies available")
-            if await self._check_proxy(proxy):
+            if proxy_check:
                 return {
                     "http://": proxy,
                     "https://": proxy,

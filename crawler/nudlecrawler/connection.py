@@ -139,7 +139,7 @@ class ConnectionManager:
             "Accept": "*/*",
         }
 
-    async def _check_proxy(self, proxy: str) -> bool:
+    async def _check_proxy(self, proxy: str, cf_check: bool = True, ga_check: bool = True) -> bool:
         try:
             proxy_parts = proxy.split('@')
             headers = self._get_headers()
@@ -173,38 +173,40 @@ class ConnectionManager:
                         f"Basic proxy check failed for {proxy}: {e}")
                     return False
 
-                # @logic: Test 2 - Cloudflare protected site
-                try:
-                    cf_response = await client.get("https://nowsecure.nl")
-                    cf_response.raise_for_status()
-                    if "cf-ray" not in cf_response.headers:
-                        logger.warning(
-                            f"Cloudflare check failed for {proxy}: 'cf-ray' header missing.")
-                    logger.debug(f"Proxy Cloudflare check passed for {proxy}")
+                # @logic: Test 2 - Cloudflare protected site (optional, can be slow)
+                if cf_check:
+                    try:
+                        cf_response = await client.get("https://nowsecure.nl")
+                        cf_response.raise_for_status()
+                        if "<title>nowsecure.nl</title>" not in cf_response.content:
+                            logger.warning(
+                                f"Cloudflare check failed for {proxy}: Unexpected content")
+                        logger.debug(f"Proxy Cloudflare check passed for {proxy}")
 
-                except httpx.HTTPStatusError as e:
-                    logger.warning(
-                        f"Cloudflare check failed for {proxy}: Status {e.response.status_code}")
-                    return False
-                except Exception as e:
-                    logger.warning(f"Cloudflare check failed for {proxy}: {e}")
-                    return False
+                    except httpx.HTTPStatusError as e:
+                        logger.warning(
+                            f"Cloudflare check failed for {proxy}: Status {e.response.status_code}")
+                        return False
+                    except Exception as e:
+                        logger.warning(f"Cloudflare check failed for {proxy}: {e}")
+                        return False
 
                 # @logic: Test 3 - General site accessibility (optional, can be slow)
-                try:
-                    google_response = await client.get("https://www.google.com")
-                    google_response.raise_for_status()
-                    logger.debug(
-                        f"Proxy general accessibility check passed for {proxy}")
+                if ga_check:
+                    try:
+                        google_response = await client.get("https://www.google.com")
+                        google_response.raise_for_status()
+                        logger.debug(
+                            f"Proxy general accessibility check passed for {proxy}")
 
-                except httpx.HTTPStatusError as e:
-                    logger.warning(
-                        f"General accessibility check failed for {proxy}: Status {e.response.status_code}")
-                    return False
-                except Exception as e:
-                    logger.warning(
-                        f"General accessibility check failed for {proxy}: {e}")
-                    return False
+                    except httpx.HTTPStatusError as e:
+                        logger.warning(
+                            f"General accessibility check failed for {proxy}: Status {e.response.status_code}")
+                        return False
+                    except Exception as e:
+                        logger.warning(
+                            f"General accessibility check failed for {proxy}: {e}")
+                        return False
 
             logger.info(f"Proxy check successful for {proxy}")
             return True

@@ -1,0 +1,1 @@
+from nudlecrawler.connection import ConnectionManager

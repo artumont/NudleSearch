@@ -31,26 +31,26 @@ class ConnectionManager:
                 self.proxy_pool = proxy_pool
 
     # @context: Public
-    async def post(self, url: str, data: dict) -> httpx.Response | Exception:
+    async def post(self, url: str, payload: dict) -> httpx.Response | Exception:
         try:
             # @note: This will be fetching via a fetcher API instead of fetching thru a proxy
             if self.proxy_type == ProxyTypes.BRIDGE:
                 try:
-                    return await self._post_bridge(url, data)
+                    return await self._post_bridge(url, payload)
                 except Exception as e:
                     logger.error(f"Bridge post request failed: {e}")
                     raise
             # @note: This will be fetching via a proxy/client_ip instead of fetching thru a fetcher API
             elif self.proxy_type in [ProxyTypes.STATIC, ProxyTypes.ROTATING]:
                 try:
-                    return await self._post_static_rotating(url, data)
+                    return await self._post_static_rotating(url, payload)
                 except Exception as e:
                     logger.error(f"Static/Rotating post request failed: {e}")
                     raise
             # @note: This will be fetching without a proxy
             else:
                 try:
-                    return await self._post_disabled(url, data)
+                    return await self._post_disabled(url, payload)
                 except Exception as e:
                     logger.error(f"Proxyless post request failed: {e}")
                     raise
@@ -62,15 +62,15 @@ class ConnectionManager:
         pass
 
     # @context: Private
-    async def _post_bridge(self, url: str, data: dict) -> httpx.Response | Exception:
+    async def _post_bridge(self, url: str, payload: dict) -> httpx.Response | Exception:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                url=self.proxy_pool[0],
+                url=self.proxy_pool[0] + "/post",
                 headers=self._get_headers(),
                 timeout=self.timeout,
-                data={
+                json={
                     "url": url,
-                    "data": data
+                    "payload": payload
                 }
             )
 
@@ -81,14 +81,14 @@ class ConnectionManager:
 
         return response
 
-    async def _post_static_rotating(self, url: str, data: dict) -> httpx.Response | Exception:
+    async def _post_static_rotating(self, url: str, payload: dict) -> httpx.Response | Exception:
         proxy = await self._get_proxy()
         async with httpx.AsyncClient(proxies=proxy) as client:
             response = await client.post(
                 url=url,
                 headers=self._get_headers(),
                 timeout=self.timeout,
-                data=data
+                json=payload
             )
 
         if response.status_code != 200:
@@ -99,13 +99,13 @@ class ConnectionManager:
 
         return response
 
-    async def _post_disabled(self, url: str, data: dict) -> httpx.Response | Exception:
+    async def _post_disabled(self, url: str, payload: dict) -> httpx.Response | Exception:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 url=url,
                 headers=self._get_headers(),
                 timeout=self.timeout,
-                data=data
+                json=payload
             )
 
         if response.status_code != 200:
@@ -134,9 +134,9 @@ class ConnectionManager:
         # @todo: Make this dynamic based on the request type or something else (GET/POST) maybe even rotating user agents
         return {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Connection": "keep-alive",
+            "Accept": "*/*",
         }
 
     async def _check_proxy(self, proxy: str) -> bool:

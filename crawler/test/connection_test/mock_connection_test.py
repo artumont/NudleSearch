@@ -1,11 +1,83 @@
-import pytest
+import os
+import socket
+import threading
+import time
+import flask
 import httpx
+import pytest
+from werkzeug.serving import make_server
 from unittest.mock import AsyncMock, MagicMock, patch, call
 from nudlecrawler.connection import ConnectionManager, ProxyTypes, BridgeException, ProxyException
-import os
 
 
 os.environ.setdefault("TIMEOUT", "5")
+
+
+class LiveServerThread(threading.Thread):
+    def __init__(self, app, host='127.0.0.1'):
+        super().__init__()
+        self.daemon = True  # @note: Allow main program to exit even if this thread is running
+        self.app = app
+        self.host = host
+        # @note: Bind to port 0 to let the OS choose a free port
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.host, 0))
+            self.port = s.getsockname()[1]
+
+        self.server = make_server(
+            self.host, self.port, self.app, threaded=True)
+        self.ctx = self.app.app_context()
+        self.url = f"http://{self.host}:{self.port}"
+
+    def run(self):
+        self.ctx.push()
+        self.server.serve_forever()
+
+    def shutdown(self):
+        self.server.shutdown()
+        self.join(timeout=5)
+
+
+@pytest.fixture(scope="module")
+def bridge_flask_app():
+    """Fixture to create the Flask app instance for the bridge proxy."""
+    app = flask.Flask(__name__)
+    app.testing = True
+
+    @app.route('/bridge/post', methods=['POST'])
+    def bridge_route():
+        if not flask.request.is_json:
+            return flask.jsonify({
+                "status": "error",
+                "message": "Content-Type must be application/json"
+            }), 415
+
+        json_data = flask.request.get_json(force=True)
+        if json_data is None:
+            return flask.jsonify({
+                "status": "error",
+                "message": "No JSON data received"
+            }), 400
+
+        return flask.jsonify({
+            "status": "success",
+            "relayed_data": "Mocked data from live bridge",
+            # @note: This is the data used in the test (not sent back in actual requests)
+            "requested_url": json_data.get("url"),
+            "payload": json_data.get("payload"),
+        })
+
+    return app
+
+
+@pytest.fixture(scope="module")
+def live_bridge_server(bridge_flask_app):
+    """Fixture to start the Flask app on a live server and yield its base URL."""
+    server_thread = LiveServerThread(bridge_flask_app)
+    server_thread.start()
+    time.sleep(0.1)
+    yield server_thread.url
+    server_thread.shutdown()
 
 
 @pytest.fixture
@@ -60,7 +132,7 @@ async def test_post_disabled_success(mock_async_client_cls, mock_response, mock_
         url=url,
         headers=manager._get_headers(),
         timeout=manager.timeout,
-        data=data
+        json=data
     )
 
 
@@ -110,7 +182,7 @@ async def test_post_static_success(mock_async_client_cls, mock_check_proxy, mock
         url=url,
         headers=manager._get_headers(),
         timeout=manager.timeout,
-        data=data
+        json=data
     )
 
     mock_check_proxy.assert_called_once_with(proxy)
@@ -168,7 +240,7 @@ async def test_post_rotating_success(mock_async_client_cls, mock_check_proxy, mo
         url=url,
         headers=manager._get_headers(),
         timeout=manager.timeout,
-        data=data
+        json=data
     )
     assert manager.proxy_idx == 1
 
@@ -178,7 +250,6 @@ async def test_post_rotating_success(mock_async_client_cls, mock_check_proxy, mo
 @patch('nudlecrawler.connection.httpx.AsyncClient')
 async def test_post_rotating_skips_bad_proxy(mock_async_client_cls, mock_check_proxy, mock_response, mock_async_client):
     """Test ROTATING proxy skips a bad proxy and uses the next one."""
-
     mock_check_proxy.side_effect = [False, True]
     mock_async_client_cls.return_value = mock_async_client
     mock_async_client.post = AsyncMock(
@@ -202,7 +273,7 @@ async def test_post_rotating_skips_bad_proxy(mock_async_client_cls, mock_check_p
         url=url,
         headers=manager._get_headers(),
         timeout=manager.timeout,
-        data=data
+        json=data
     )
     assert manager.proxy_idx == 0
 
@@ -228,50 +299,49 @@ async def test_post_rotating_no_working_proxies(mock_check_proxy):
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.httpx.AsyncClient')
-async def test_post_bridge_success(mock_async_client_cls, mock_response, mock_async_client):
+async def test_post_bridge_success(live_bridge_server):
     """Test successful POST request with BRIDGE proxy type."""
-    mock_async_client_cls.return_value = mock_async_client
-    mock_async_client.post = AsyncMock(return_value=mock_response(
-        status_code=200, json_data={"bridge_status": "ok"}))
+    target_url_to_proxy = "http://example.com/some/path"
+    payload_for_target_url = {"key": "value", "action": "submit"}
 
-    bridge_url = "http://mybridge.com/fetch"
     manager = ConnectionManager(
-        proxy_type=ProxyTypes.BRIDGE, proxy_pool=bridge_url)
-    target_url = "http://target.com/data"
-    data = {"target_key": "target_value"}
-
-    response = await manager.post(target_url, data)
-
-    assert response.status_code == 200
-    assert response.json() == {"bridge_status": "ok"}
-
-    mock_async_client.post.assert_called_once_with(
-        url=bridge_url,
-        headers=manager._get_headers(),
-        timeout=manager.timeout,
-        data={
-            "url": target_url,
-            "data": data
-        }
+        proxy_type=ProxyTypes.BRIDGE,
+        proxy_pool=live_bridge_server + "/bridge"
     )
+
+    response = await manager.post(target_url_to_proxy, payload_for_target_url)
+
+    assert response is not None, "Response object should not be None"
+    assert response.status_code == 200, \
+        f"Bridge post request failed. Status: {response.status_code}. Response text: {await response.text()}"
+
+    try:
+        response_data = response.json()
+    except Exception as e:
+        pytest.fail(f"Failed to parse response JSON: {e}. Response text: {await response.text()}")
+
+    assert response_data.get(
+        "status") == "success", "Bridge operation status was not 'success'"
+    assert response_data.get(
+        "requested_url") == target_url_to_proxy, "Proxied URL mismatch in response"
+    assert response_data.get(
+        "payload") == payload_for_target_url, "Proxied payload mismatch in response"
+    assert response_data.get(
+        "relayed_data") == "Mocked data from live bridge", "Relayed data content mismatch"
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.httpx.AsyncClient')
-async def test_post_bridge_failure(mock_async_client_cls, mock_response, mock_async_client):
+async def test_post_bridge_failure(live_bridge_server):
     """Test failed POST request (non-200) with BRIDGE proxy type."""
-    mock_async_client_cls.return_value = mock_async_client
-    mock_async_client.post = AsyncMock(
-        return_value=mock_response(status_code=503))
+    target_url = "http://example.com/some/path"
+    payload = {"key": "value", "action": "submit"}
 
-    bridge_url = "http://mybridge.com/fetch"
     manager = ConnectionManager(
-        proxy_type=ProxyTypes.BRIDGE, proxy_pool=bridge_url)
-    target_url = "http://target.com/data"
-    data = {"target_key": "target_value"}
+        proxy_type=ProxyTypes.BRIDGE,
+        proxy_pool=live_bridge_server + "/invalid_bridge"
+    )
 
     with pytest.raises(BridgeException) as excinfo:
-        await manager.post(target_url, data)
-    assert "Bridge connection failed with status code: 503" in str(
+        await manager.post(target_url, payload)
+    assert "Bridge connection failed with status code: 404" in str(
         excinfo.value)

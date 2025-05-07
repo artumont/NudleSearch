@@ -22,6 +22,7 @@ build-backend = "pdm.backend"
 test = [
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
+    "flask>=3.1.0",
 ]
 
 [tool.pytest.ini_options]

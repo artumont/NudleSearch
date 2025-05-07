@@ -51,6 +51,7 @@ class Database:
                 )
             """)
 
+            # @note: Create indexes for faster searches
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_url ON documents(url)")
             cursor.execute(

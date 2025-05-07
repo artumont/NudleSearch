@@ -20,10 +20,12 @@ class ProxyTypes(Enum):
 
 
 class ConnectionManager:
-    def __init__(self, proxy_type: ProxyTypes, proxy_pool: str | List[str] | None):
+    def __init__(self, proxy_type: ProxyTypes, proxy_pool: str | List[str] | None, rotate_after: int = 5):
         self.proxy_idx = 0
         self.timeout = int(os.environ.get("TIMEOUT", 10))
         self.proxy_type = proxy_type
+        self.rotate_after = rotate_after
+        self.rotation_idx = 0
         if proxy_pool:
             if isinstance(proxy_pool, str):
                 self.proxy_pool = [proxy_pool]
@@ -79,6 +81,7 @@ class ConnectionManager:
             raise BridgeException(
                 f"Bridge connection failed with status code: {response.status_code}")
 
+        logger.info(f"Bridge connection successful")
         return response
 
     async def _post_static_rotating(self, url: str, payload: dict) -> httpx.Response | Exception:
@@ -97,6 +100,7 @@ class ConnectionManager:
             raise BridgeException(
                 f"Static/Rotating connection failed with status code: {response.status_code}")
 
+        logger.info(f"Static/Rotating connection successful")
         return response
 
     async def _post_disabled(self, url: str, payload: dict) -> httpx.Response | Exception:
@@ -114,21 +118,32 @@ class ConnectionManager:
             raise BridgeException(
                 f"Proxyless connection failed with status code: {response.status_code}")
 
+        logger.info(f"Proxyless connection successful")
         return response
 
     async def _get_proxy(self) -> str | Exception:
         start_idx = self.proxy_idx
+        logger.info(f"Starting proxy check from index: {start_idx}")
         while True:
+            if self.rotation_idx > self.rotate_after:
+                self.proxy_idx = (self.proxy_idx + 1) % len(self.proxy_pool)
+                self.rotation_idx = 0
+            else:
+                self.rotation_idx += 1
+
             proxy = self.proxy_pool[self.proxy_idx]
-            self.proxy_idx = (self.proxy_idx + 1) % len(self.proxy_pool)
             proxy_check = await self._check_proxy(proxy)
             if self.proxy_idx == start_idx and not proxy_check:
                 raise ProxyException("No working proxies available")
             if proxy_check:
+                logger.info(f"Using proxy: {proxy}")
                 return {
                     "http://": proxy,
                     "https://": proxy,
                 }
+            else:
+                logger.warning(f"Proxy check failed for {proxy}. Trying next proxy...")
+                self.proxy_idx += 1
 
     def _get_headers(self) -> dict:
         # @todo: Make this dynamic based on the request type or something else (GET/POST) maybe even rotating user agents

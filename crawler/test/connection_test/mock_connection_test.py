@@ -222,7 +222,7 @@ async def test_post_rotating_success(mock_async_client_cls, mock_check_proxy, mo
 
     proxies = ["http://proxy1.com:8080", "http://proxy2.com:8080"]
     manager = ConnectionManager(
-        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies)
+        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies, rotate_after=1)
     url = "http://test.com/post_rotating"
     data = {"key_rotating": "value_rotating"}
 
@@ -257,7 +257,7 @@ async def test_post_rotating_skips_bad_proxy(mock_async_client_cls, mock_check_p
 
     proxies = ["http://badproxy.com:8080", "http://goodproxy.com:8080"]
     manager = ConnectionManager(
-        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies)
+        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies, rotate_after=1)
     url = "http://test.com/post_rotating_skip"
     data = {"key": "value"}
 
@@ -286,7 +286,7 @@ async def test_post_rotating_no_working_proxies(mock_check_proxy):
 
     proxies = ["http://badproxy1.com:8080", "http://badproxy2.com:8080"]
     manager = ConnectionManager(
-        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies)
+        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies, rotate_after=1)
     url = "http://test.com/post_rotating_fail"
     data = {"key": "value"}
 

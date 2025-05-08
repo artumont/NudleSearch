@@ -242,6 +242,12 @@ async def test_post_rotating_success(mock_async_client_cls, mock_check_proxy, mo
         timeout=manager.timeout,
         json=data
     )
+    assert manager.rotation_idx == 1
+    assert manager.proxy_idx == 0
+    
+    await manager._get_proxy()
+    
+    assert manager.rotation_idx == 0
     assert manager.proxy_idx == 1
 
 
@@ -275,7 +281,7 @@ async def test_post_rotating_skips_bad_proxy(mock_async_client_cls, mock_check_p
         timeout=manager.timeout,
         json=data
     )
-    assert manager.proxy_idx == 0
+    assert manager.proxy_idx == 1
 
 
 @pytest.mark.asyncio

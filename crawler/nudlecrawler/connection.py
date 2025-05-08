@@ -122,10 +122,8 @@ class ConnectionManager:
         return response
 
     async def _get_proxy(self) -> str | Exception:
-        start_idx = self.proxy_idx
-        logger.info(f"Starting proxy check from index: {start_idx}")
         while True:
-            if self.rotation_idx > self.rotate_after:
+            if self.rotation_idx >= self.rotate_after:
                 self.proxy_idx = (self.proxy_idx + 1) % len(self.proxy_pool)
                 self.rotation_idx = 0
             else:
@@ -133,7 +131,7 @@ class ConnectionManager:
 
             proxy = self.proxy_pool[self.proxy_idx]
             proxy_check = await self._check_proxy(proxy)
-            if self.proxy_idx == start_idx and not proxy_check:
+            if self.proxy_idx == len(self.proxy_pool)-1 and not proxy_check:
                 raise ProxyException("No working proxies available")
             if proxy_check:
                 logger.info(f"Using proxy: {proxy}")
@@ -144,6 +142,7 @@ class ConnectionManager:
             else:
                 logger.warning(f"Proxy check failed for {proxy}. Trying next proxy...")
                 self.proxy_idx += 1
+                self.rotation_idx = 0
 
     def _get_headers(self) -> dict:
         # @todo: Make this dynamic based on the request type or something else (GET/POST) maybe even rotating user agents

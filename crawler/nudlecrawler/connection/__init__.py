@@ -6,6 +6,7 @@ from typing import List, Optional, Dict
 from urllib.parse import urlparse
 from nudlecrawler.connection.exceptions import BridgeException
 from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType, UseCases
+from nudlecrawler.connection.types import Response
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ConnectionManager:
             timeout=int(os.getenv("TIMEOUT", 30))
         )
 
-        # Proxy management
+        # @params: Proxy management
         self._rotation_count: Dict[str, int] = {}
         self._current_proxy_idx: int = 0
         self._proxy_checks: List[ProxyChecks] = [
@@ -57,7 +58,7 @@ class ConnectionManager:
             ProxyChecks.GENERAL
         ]
 
-        # Headers
+        # @params: Headers
         self._custom_user_agent: Optional[str] = None
         self._default_headers = {
             "Accept-Language": "en-US,en;q=0.5",
@@ -65,6 +66,7 @@ class ConnectionManager:
             "Accept": "*/*"
         }
 
+    # @context: Setters
     def set_user_agent(self, user_agent: Optional[str]) -> None:
         """Set a custom User-Agent header.
 
@@ -98,6 +100,7 @@ class ConnectionManager:
         self._proxy_checks = checks
         logger.debug(f"Proxy checks set to: {checks}")
 
+    # @context: Public
     async def post(self, url: str, payload: dict) -> httpx.Response:
         """Make a POST request with optional proxy routing.
 
@@ -141,6 +144,7 @@ class ConnectionManager:
         else:
             return await self._get_normal(url, proxy)
 
+    # @context: Private
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers with optional custom User-Agent.
 
@@ -182,7 +186,7 @@ class ConnectionManager:
             Returns NONE type proxy if no valid proxies are available
         """
         if not self.proxy_pool:
-            return Proxy(url="", type=ProxyType.NONE)
+            return Proxy(url="http://0.0.0.0:0000", type=ProxyType.NONE)
 
         proxies_checked = 0
         while proxies_checked < len(self.proxy_pool):
@@ -212,7 +216,7 @@ class ConnectionManager:
 
         logger.warning(
             "No valid proxies available, falling back to direct connection")
-        return Proxy(url="", type=ProxyType.NONE)
+        return Proxy(url="http://0.0.0.0:0000", type=ProxyType.NONE)
 
     def _create_bridge_response(self, response: httpx.Response) -> httpx.Response:
         """Create response object from bridge proxy response.
@@ -227,13 +231,14 @@ class ConnectionManager:
             BridgeException: If response processing fails
         """
         try:
-            return httpx.Response(
+            json_response = response.json()
+            return Response(
                 status_code=response.status_code,
                 headers=response.headers,
-                content=response.json().get("content", {}),
-                text=response.json().get("text", ""),
-                html=response.json().get("html", ""),
-                json=response.json().get("json", {})
+                content=json_response.get('content', b''),
+                text=json_response.get('text', ''),
+                html=json_response.get('html', ''),
+                json=json_response.get('json', '')
             )
         except Exception as e:
             raise BridgeException(
@@ -261,8 +266,7 @@ class ConnectionManager:
         }
 
         if proxy.type != ProxyType.NONE:
-            client_args["proxies"] = {
-                "http://": proxy.url, "https://": proxy.url}
+            client_args["proxy"] = proxy.url
 
         async with httpx.AsyncClient(**client_args) as client:
             return await client.post(
@@ -290,7 +294,7 @@ class ConnectionManager:
             verify=self.request_config.verify_ssl
         ) as client:
             response = await client.post(
-                url=proxy.url,
+                url=proxy.url+"/post",
                 json={"url": url, "payload": payload},
                 headers=self._get_headers()
             )
@@ -322,8 +326,7 @@ class ConnectionManager:
         }
 
         if proxy.type != ProxyType.NONE:
-            client_args["proxies"] = {
-                "http://": proxy.url, "https://": proxy.url}
+            client_args["proxy"] = proxy.url
 
         async with httpx.AsyncClient(**client_args) as client:
             return await client.get(
@@ -349,7 +352,7 @@ class ConnectionManager:
             verify=self.request_config.verify_ssl
         ) as client:
             response = await client.get(
-                url=proxy.url,
+                url=proxy.url+"/get",
                 params={"url": url},
                 headers=self._get_headers()
             )

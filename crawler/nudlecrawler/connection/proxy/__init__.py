@@ -1,7 +1,7 @@
 import httpx
 import logging
 from enum import Enum
-from typing import Dict, List, Type, Union
+from typing import Callable, Dict, List, Optional, Type, Union
 from pydantic import BaseModel, field_validator, Field
 from nudlecrawler.connection.proxy.checks import BaseProxyCheck, AliveCheck, CloudflareCheck, GeneralCheck
 
@@ -71,6 +71,7 @@ class Proxy(BaseModel):
     type: ProxyType
     usage: List[UseCases] = Field(default_factory=list)
     rotation: RotationConfig = Field(default_factory=RotationConfig)
+    perform_checks: Callable = None
 
     _check_map: Dict[ProxyChecks, Type[BaseProxyCheck]] = {
         ProxyChecks.ALIVE: AliveCheck,
@@ -86,8 +87,7 @@ class Proxy(BaseModel):
 
         parts = v.split('://')
         if len(parts) != 2:
-            raise ValueError(
-                "Proxy URL must include protocol (e.g., http://, https://)")
+            raise ValueError("Proxy URL must include protocol (e.g., http://, https://)")
 
         host_part = parts[1].split('@')[-1]
         if ':' not in host_part:
@@ -111,7 +111,7 @@ class Proxy(BaseModel):
         Returns:
             bool: True if all checks pass, False otherwise
         """
-        if not checks:
+        if not checks or self.type == ProxyType.NONE:
             return True
 
         check_instances = []
@@ -124,9 +124,9 @@ class Proxy(BaseModel):
             return True
 
         async with httpx.AsyncClient(
-            proxies={"http://": self.url, "https://": self.url},
-            verify=True,  # Enable SSL verification
-            timeout=30.0  # Set a reasonable timeout
+            proxy=self.url,
+            verify=True,  # @param: Enable SSL verification
+            timeout=30.0  # @param: Set a reasonable timeout
         ) as client:
             try:
                 return await BaseProxyCheck.run_checks(client, check_instances)

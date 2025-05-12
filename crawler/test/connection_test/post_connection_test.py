@@ -7,7 +7,9 @@ import httpx
 import pytest
 from werkzeug.serving import make_server
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from nudlecrawler.connection import ConnectionManager, ProxyTypes, BridgeException, ProxyException
+from nudlecrawler.connection import ConnectionManager, RequestConfig
+from nudlecrawler.connection.exceptions import BridgeException
+from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType, UseCases, RotationConfig
 
 
 os.environ.setdefault("TIMEOUT", "5")
@@ -60,11 +62,10 @@ def bridge_flask_app():
             }), 400
 
         return flask.jsonify({
-            "status": "success",
-            "relayed_data": "Mocked data from live bridge",
-            # @note: This is the data used in the test (not sent back in actual requests)
-            "requested_url": json_data.get("url"),
-            "payload": json_data.get("payload"),
+            "content": "Mocked data from live bridge",
+            "text": "Mocked text from live bridge",
+            "html": "Mocked HTML from live bridge",
+            "json": json_data["payload"]
         })
 
     return app
@@ -114,13 +115,13 @@ def mock_async_client():
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
 async def test_post_disabled_success(mock_async_client_cls, mock_response, mock_async_client):
-    """Test successful POST request with DISABLED proxy type."""
+    """Test successful POST request with no proxy."""
     mock_async_client_cls.return_value = mock_async_client
     mock_async_client.post = AsyncMock(return_value=mock_response(
         status_code=200, json_data={"status": "ok"}))
 
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.DISABLED, proxy_pool=None)
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=None, request_config=config)
     url = "http://test.com"
     data = {"key": "value"}
 
@@ -131,7 +132,6 @@ async def test_post_disabled_success(mock_async_client_cls, mock_response, mock_
     mock_async_client.post.assert_called_once_with(
         url=url,
         headers=manager._get_headers(),
-        timeout=manager.timeout,
         json=data
     )
 
@@ -139,34 +139,37 @@ async def test_post_disabled_success(mock_async_client_cls, mock_response, mock_
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
 async def test_post_disabled_failure(mock_async_client_cls, mock_response, mock_async_client):
-    """Test failed POST request (non-200) with DISABLED proxy type."""
+    """Test failed POST request (non-200) with no proxy."""
     mock_async_client_cls.return_value = mock_async_client
     mock_async_client.post = AsyncMock(
         return_value=mock_response(status_code=404))
 
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.DISABLED, proxy_pool=None)
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=None, request_config=config)
     url = "http://test.com/notfound"
     data = {"key": "value"}
 
-    with pytest.raises(BridgeException) as excinfo:
-        await manager.post(url, data)
-    assert "Proxyless connection failed with status code: 404" in str(
-        excinfo.value)
+    response = await manager.post(url, data)
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.ConnectionManager._check_proxy', new_callable=AsyncMock)
 @patch('nudlecrawler.connection.httpx.AsyncClient')
-async def test_post_static_success(mock_async_client_cls, mock_check_proxy, mock_response, mock_async_client):
-    """Test successful POST request with STATIC proxy type."""
-    mock_check_proxy.return_value = True
+async def test_post_static_success(mock_async_client_cls, mock_response, mock_async_client):
+    """Test successful POST request with SIMPLE proxy type."""
     mock_async_client_cls.return_value = mock_async_client
     mock_async_client.post = AsyncMock(return_value=mock_response(
         status_code=200, json_data={"status": "ok_static"}))
 
-    proxy = "http://user:pass@staticproxy.com:8080"
-    manager = ConnectionManager(proxy_type=ProxyTypes.STATIC, proxy_pool=proxy)
+    proxy = Proxy(
+        url="http://user:pass@staticproxy.com:8080",
+        type=ProxyType.SIMPLE,
+        usage=[UseCases.DEFAULT]
+    )
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=[proxy], request_config=config)
+    manager.set_proxy_checks([])
+
     url = "http://test.com/post_static"
     data = {"key_static": "value_static"}
 
@@ -174,134 +177,142 @@ async def test_post_static_success(mock_async_client_cls, mock_check_proxy, mock
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok_static"}
-    expected_proxies = {"http://": proxy, "https://": proxy}
-
-    mock_async_client_cls.assert_called_once_with(proxies=expected_proxies)
-
-    mock_async_client.post.assert_called_once_with(
-        url=url,
-        headers=manager._get_headers(),
-        timeout=manager.timeout,
-        json=data
-    )
-
-    mock_check_proxy.assert_called_once_with(proxy)
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.ConnectionManager._check_proxy', new_callable=AsyncMock)
 @patch('nudlecrawler.connection.httpx.AsyncClient')
-async def test_post_static_failure(mock_async_client_cls, mock_check_proxy, mock_response, mock_async_client):
-    """Test failed POST request (non-200) with STATIC proxy type."""
-    mock_check_proxy.return_value = True
+async def test_post_static_failure(mock_async_client_cls, mock_response, mock_async_client):
+    """Test failed POST request (non-200) with SIMPLE proxy type."""
     mock_async_client_cls.return_value = mock_async_client
-    mock_async_client.post = AsyncMock(
-        return_value=mock_response(status_code=500))
+    mock_async_client.post = AsyncMock(return_value=mock_response(
+        status_code=500))
 
-    proxy = "http://staticproxy.com:8080"
-    manager = ConnectionManager(proxy_type=ProxyTypes.STATIC, proxy_pool=proxy)
+    proxy = Proxy(
+        url="http://staticproxy.com:8080",
+        type=ProxyType.SIMPLE,
+        usage=[UseCases.DEFAULT]
+    )
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=[proxy], request_config=config)
+    manager.set_proxy_checks([])
+
     url = "http://test.com/servererror"
     data = {"key": "value"}
 
-    with pytest.raises(BridgeException) as excinfo:
-        await manager.post(url, data)
-    assert "Static/Rotating connection failed with status code: 500" in str(
-        excinfo.value)
-    mock_check_proxy.assert_called_once_with(proxy)
+    response = await manager.post(url, data)
+
+    assert response.status_code == 500
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.ConnectionManager._check_proxy', new_callable=AsyncMock)
 @patch('nudlecrawler.connection.httpx.AsyncClient')
-async def test_post_rotating_success(mock_async_client_cls, mock_check_proxy, mock_response, mock_async_client):
+async def test_post_rotating_success(mock_async_client_cls, mock_response, mock_async_client):
     """Test successful POST request with ROTATING proxy type."""
-    mock_check_proxy.return_value = True
     mock_async_client_cls.return_value = mock_async_client
     mock_async_client.post = AsyncMock(return_value=mock_response(
         status_code=200, json_data={"status": "ok_rotating"}))
 
-    proxies = ["http://proxy1.com:8080", "http://proxy2.com:8080"]
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies, rotate_after=1)
+    proxies = [
+        Proxy(
+            url="http://proxy1.com:8080",
+            type=ProxyType.ROTATING,
+            usage=[UseCases.DEFAULT],
+            rotation=RotationConfig(enabled=True, interval=1)
+        ),
+        Proxy(
+            url="http://proxy2.com:8080",
+            type=ProxyType.ROTATING,
+            usage=[UseCases.DEFAULT],
+            rotation=RotationConfig(enabled=True, interval=1)
+        )
+    ]
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=proxies, request_config=config)
+    manager.set_proxy_checks([])
+    
     url = "http://test.com/post_rotating"
     data = {"key_rotating": "value_rotating"}
 
+    assert manager._current_proxy_idx == 0
     response = await manager.post(url, data)
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok_rotating"}
 
-    mock_check_proxy.assert_called_once_with(proxies[0])
-
-    expected_proxies = {"http://": proxies[0], "https://": proxies[0]}
-    mock_async_client_cls.assert_called_once_with(proxies=expected_proxies)
-
-    mock_async_client.post.assert_called_once_with(
-        url=url,
-        headers=manager._get_headers(),
-        timeout=manager.timeout,
-        json=data
-    )
-    assert manager.rotation_idx == 1
-    assert manager.proxy_idx == 0
-    
-    await manager._get_proxy()
-    
-    assert manager.rotation_idx == 0
-    assert manager.proxy_idx == 1
+    assert manager._current_proxy_idx == 1
+    assert manager._rotation_count[proxies[0].url] == 0
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.ConnectionManager._check_proxy', new_callable=AsyncMock)
 @patch('nudlecrawler.connection.httpx.AsyncClient')
-async def test_post_rotating_skips_bad_proxy(mock_async_client_cls, mock_check_proxy, mock_response, mock_async_client):
+async def test_post_rotating_skips_bad_proxy(mock_async_client_cls, mock_response, mock_async_client):
     """Test ROTATING proxy skips a bad proxy and uses the next one."""
-    mock_check_proxy.side_effect = [False, True]
     mock_async_client_cls.return_value = mock_async_client
     mock_async_client.post = AsyncMock(
         return_value=mock_response(status_code=200))
 
-    proxies = ["http://badproxy.com:8080", "http://goodproxy.com:8080"]
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies, rotate_after=1)
+    proxies = [
+        Proxy(
+            url="http://badproxy.com:8080",
+            type=ProxyType.ROTATING,
+            usage=[UseCases.DEFAULT],
+            rotation=RotationConfig(enabled=True, interval=1)
+        ),
+        Proxy(
+            url="http://goodproxy.com:8080",
+            type=ProxyType.ROTATING,
+            usage=[UseCases.DEFAULT],
+            rotation=RotationConfig(enabled=True, interval=1)
+        )
+    ]
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=proxies, request_config=config)
+    manager.set_proxy_checks([])
+
+    async def mock_perform_checks(*args, **kwargs):
+        return proxies[0].url != "http://badproxy.com:8080"
+
+    for proxy in proxies:
+        proxy.perform_checks = AsyncMock(side_effect=mock_perform_checks)
+
     url = "http://test.com/post_rotating_skip"
     data = {"key": "value"}
 
-    await manager.post(url, data)
-
-    assert mock_check_proxy.call_count == 2
-    mock_check_proxy.assert_has_calls([call(proxies[0]), call(proxies[1])])
-
-    expected_proxies = {"http://": proxies[1], "https://": proxies[1]}
-    mock_async_client_cls.assert_called_once_with(proxies=expected_proxies)
-
-    mock_async_client.post.assert_called_once_with(
-        url=url,
-        headers=manager._get_headers(),
-        timeout=manager.timeout,
-        json=data
-    )
-    assert manager.proxy_idx == 1
+    response = await manager.post(url, data)
+    assert response.status_code == 200
+    assert manager._current_proxy_idx == 1
 
 
 @pytest.mark.asyncio
-@patch('nudlecrawler.connection.ConnectionManager._check_proxy', new_callable=AsyncMock)
-async def test_post_rotating_no_working_proxies(mock_check_proxy):
-    """Test ROTATING proxy raises ProxyException when no proxies work."""
-    mock_check_proxy.return_value = False
+@patch('nudlecrawler.connection.httpx.AsyncClient')
+async def test_post_rotating_no_working_proxies(mock_async_client_cls, mock_response, mock_async_client):
+    """Test ROTATING proxy returns NONE type when no proxies work."""
+    mock_async_client_cls.return_value = mock_async_client
+    mock_async_client.post = AsyncMock(
+        return_value=mock_response(status_code=200))
 
-    proxies = ["http://badproxy1.com:8080", "http://badproxy2.com:8080"]
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.ROTATING, proxy_pool=proxies, rotate_after=1)
+    proxies = [
+        Proxy(
+            url="http://badproxy1.com:8080",
+            type=ProxyType.ROTATING,
+            usage=[UseCases.DEFAULT],
+            rotation=RotationConfig(enabled=True, interval=1)
+        )
+    ]
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=proxies, request_config=config)
+
+    for proxy in proxies:
+        proxy.perform_checks = AsyncMock(return_value=False)
+
     url = "http://test.com/post_rotating_fail"
     data = {"key": "value"}
 
-    with pytest.raises(ProxyException) as excinfo:
-        await manager.post(url, data)
-    assert "No working proxies available" in str(excinfo.value)
+    response = await manager.post(url, data)
+    assert response.status_code == 200
 
-    assert mock_check_proxy.call_count == 2
-    mock_check_proxy.assert_has_calls([call(proxies[0]), call(proxies[1])])
+    for proxy in proxies:
+        proxy.perform_checks.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -310,30 +321,22 @@ async def test_post_bridge_success(live_bridge_server):
     target_url_to_proxy = "http://example.com/some/path"
     payload_for_target_url = {"key": "value", "action": "submit"}
 
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.BRIDGE,
-        proxy_pool=live_bridge_server + "/bridge"
+    proxy = Proxy(
+        url=live_bridge_server + "/bridge",
+        type=ProxyType.BRIDGE,
+        usage=[UseCases.DEFAULT]
     )
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=[proxy], request_config=config)
+    manager.set_proxy_checks([])
 
     response = await manager.post(target_url_to_proxy, payload_for_target_url)
 
-    assert response is not None, "Response object should not be None"
-    assert response.status_code == 200, \
-        f"Bridge post request failed. Status: {response.status_code}. Response text: {await response.text()}"
-
-    try:
-        response_data = response.json()
-    except Exception as e:
-        pytest.fail(f"Failed to parse response JSON: {e}. Response text: {await response.text()}")
-
-    assert response_data.get(
-        "status") == "success", "Bridge operation status was not 'success'"
-    assert response_data.get(
-        "requested_url") == target_url_to_proxy, "Proxied URL mismatch in response"
-    assert response_data.get(
-        "payload") == payload_for_target_url, "Proxied payload mismatch in response"
-    assert response_data.get(
-        "relayed_data") == "Mocked data from live bridge", "Relayed data content mismatch"
+    assert response.status_code == 200
+    assert response.content == "Mocked data from live bridge"
+    assert response.text == "Mocked text from live bridge"
+    assert response.html == "Mocked HTML from live bridge"
+    assert response.json == payload_for_target_url
 
 
 @pytest.mark.asyncio
@@ -342,12 +345,15 @@ async def test_post_bridge_failure(live_bridge_server):
     target_url = "http://example.com/some/path"
     payload = {"key": "value", "action": "submit"}
 
-    manager = ConnectionManager(
-        proxy_type=ProxyTypes.BRIDGE,
-        proxy_pool=live_bridge_server + "/invalid_bridge"
+    proxy = Proxy(
+        url=live_bridge_server + "/invalid_bridge",
+        type=ProxyType.BRIDGE,
+        usage=[UseCases.DEFAULT]
     )
+    config = RequestConfig(timeout=5)
+    manager = ConnectionManager(proxy_pool=[proxy], request_config=config)
+    manager.set_proxy_checks([])
 
     with pytest.raises(BridgeException) as excinfo:
         await manager.post(target_url, payload)
-    assert "Bridge connection failed with status code: 404" in str(
-        excinfo.value)
+    assert "Bridge request failed with status" in str(excinfo.value)

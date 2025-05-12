@@ -13,6 +13,7 @@ from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType, UseCase
 
 os.environ.setdefault("TIMEOUT", "5")
 
+
 class LiveServerThread(threading.Thread):
     def __init__(self, app, host='127.0.0.1'):
         super().__init__()
@@ -37,6 +38,7 @@ class LiveServerThread(threading.Thread):
         self.server.shutdown()
         self.join(timeout=5)
 
+
 @pytest.fixture(scope="module")
 def bridge_flask_app():
     """Fixture to create the Flask app instance for the bridge proxy."""
@@ -53,6 +55,7 @@ def bridge_flask_app():
 
     return app
 
+
 @pytest.fixture(scope="module")
 def live_bridge_server(bridge_flask_app):
     """Fixture to start the Flask app on a live server and yield its base URL."""
@@ -61,6 +64,7 @@ def live_bridge_server(bridge_flask_app):
     time.sleep(0.1)
     yield server_thread.url
     server_thread.shutdown()
+
 
 @pytest.fixture
 def mock_response():
@@ -83,6 +87,7 @@ def mock_response():
         return response
     return _mock_response
 
+
 @pytest.fixture
 def mock_async_client():
     """Fixture to mock httpx.AsyncClient."""
@@ -90,6 +95,7 @@ def mock_async_client():
     mock_client.__aenter__.return_value = mock_client
     mock_client.__aexit__.return_value = None
     return mock_client
+
 
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
@@ -112,6 +118,7 @@ async def test_get_disabled_success(mock_async_client_cls, mock_response, mock_a
         headers=manager._get_headers()
     )
 
+
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
 async def test_get_disabled_failure(mock_async_client_cls, mock_response, mock_async_client):
@@ -126,6 +133,7 @@ async def test_get_disabled_failure(mock_async_client_cls, mock_response, mock_a
 
     response = await manager.get(url)
     assert response.status_code == 404
+
 
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
@@ -151,6 +159,7 @@ async def test_get_static_success(mock_async_client_cls, mock_response, mock_asy
     assert response.status_code == 200
     assert response.json() == {"status": "ok_static"}
 
+
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
 async def test_get_static_failure(mock_async_client_cls, mock_response, mock_async_client):
@@ -173,6 +182,7 @@ async def test_get_static_failure(mock_async_client_cls, mock_response, mock_asy
     response = await manager.get(url)
 
     assert response.status_code == 500
+
 
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
@@ -199,7 +209,7 @@ async def test_get_rotating_success(mock_async_client_cls, mock_response, mock_a
     config = RequestConfig(timeout=5)
     manager = ConnectionManager(proxy_pool=proxies, request_config=config)
     manager.set_proxy_checks([])
-    
+
     url = "http://test.com/get_rotating"
 
     assert manager._current_proxy_idx == 0
@@ -210,6 +220,7 @@ async def test_get_rotating_success(mock_async_client_cls, mock_response, mock_a
 
     assert manager._current_proxy_idx == 1
     assert manager._rotation_count[proxies[0].url] == 0
+
 
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
@@ -249,6 +260,7 @@ async def test_get_rotating_skips_bad_proxy(mock_async_client_cls, mock_response
     assert response.status_code == 200
     assert manager._current_proxy_idx == 1
 
+
 @pytest.mark.asyncio
 @patch('nudlecrawler.connection.httpx.AsyncClient')
 async def test_get_rotating_no_working_proxies(mock_async_client_cls, mock_response, mock_async_client):
@@ -279,6 +291,7 @@ async def test_get_rotating_no_working_proxies(mock_async_client_cls, mock_respo
     for proxy in proxies:
         proxy.perform_checks.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_get_bridge_success(live_bridge_server):
     """Test successful GET request with BRIDGE proxy type."""
@@ -299,6 +312,7 @@ async def test_get_bridge_success(live_bridge_server):
     assert response.content == "Mocked data from live bridge"
     assert response.text == "Mocked text from live bridge"
     assert response.html == "Mocked HTML from live bridge"
+
 
 @pytest.mark.asyncio
 async def test_get_bridge_failure(live_bridge_server):

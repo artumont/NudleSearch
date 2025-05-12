@@ -87,7 +87,8 @@ class Proxy(BaseModel):
 
         parts = v.split('://')
         if len(parts) != 2:
-            raise ValueError("Proxy URL must include protocol (e.g., http://, https://)")
+            raise ValueError(
+                "Proxy URL must include protocol (e.g., http://, https://)")
 
         host_part = parts[1].split('@')[-1]
         if ':' not in host_part:

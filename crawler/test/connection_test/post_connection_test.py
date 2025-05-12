@@ -229,7 +229,7 @@ async def test_post_rotating_success(mock_async_client_cls, mock_response, mock_
     config = RequestConfig(timeout=5)
     manager = ConnectionManager(proxy_pool=proxies, request_config=config)
     manager.set_proxy_checks([])
-    
+
     url = "http://test.com/post_rotating"
     data = {"key_rotating": "value_rotating"}
 

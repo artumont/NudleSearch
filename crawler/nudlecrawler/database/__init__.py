@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Generator
 from contextlib import contextmanager
+from nudlecrawler.database.exceptions import SQLiteConnectionException, SQLiteSchemaException
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,12 @@ class DatabaseManager:
 
     def __init__(self, filepath: str):
         """Initialize SQLite database handler.
-        
-        This constructor initializes the database connection and ensures proper table structure.
-        
+
+        This constructor initializes the database connection and ensures proper table schema.
+
         Args:
             filepath (str): Path to the SQLite database file.
-            
+
         Attributes:
             filepath (str): Stored path to the database file.
             connection (sqlite3.Connection | None): Database connection object, None if not connected.
@@ -35,7 +36,7 @@ class DatabaseManager:
         self.connection: sqlite3.Connection | None = None
 
         self._connect()
-        self._ensure_structure()
+        self._ensure_schema()
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Exit method for context manager.
@@ -44,7 +45,7 @@ class DatabaseManager:
         the database connection is closed properly.
         """
         self.close()
-    
+
     # @context: Utilities
     def close(self) -> None:
         """Close the database connection.
@@ -58,9 +59,9 @@ class DatabaseManager:
             logger.info("Database connection closed.")
         else:
             logger.warning("No active database connection to close.")
-            
+
     # @context: Public
-        
+
     # @context: Private
     def _connect(self) -> bool:
         """Establish a connection to the SQLite database.
@@ -83,9 +84,10 @@ class DatabaseManager:
             logger.info("Connected to the database.")
         except sqlite3.Error as e:
             logger.error(f"Failed to connect to the database: {e}")
-            raise
+            raise SQLiteConnectionException(
+                f"Failed to connect to the database: {e}")
 
-    def _ensure_structure(self) -> None:
+    def _ensure_schema(self) -> None:
         """Initialize or validate the database schema.
 
         Creates the following tables if they don't exist:
@@ -100,8 +102,8 @@ class DatabaseManager:
         """
         try:
             with self._transaction() as cursor:
-                logger.info("Ensuring database structure...")
-                
+                logger.info("Ensuring database schema...")
+
                 # @note: Documents table - stores webpage information
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS documents (
@@ -138,11 +140,12 @@ class DatabaseManager:
                     "CREATE INDEX IF NOT EXISTS idx_url ON documents(url)")
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_word ON keywords(word)")
-                
-            logger.info("Database structure ensured.")
+
+            logger.info("Database schema ensured.")
         except sqlite3.Error as e:
-            logger.error(f"Failed to ensure database structure: {e}")
-            raise
+            logger.error(f"Failed to ensure database schema: {e}")
+            raise SQLiteSchemaException(
+                f"Failed to ensure database schema: {e}")
 
     @contextmanager
     def _transaction(self) -> Generator[sqlite3.Cursor, None, None]:

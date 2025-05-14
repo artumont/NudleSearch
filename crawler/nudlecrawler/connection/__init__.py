@@ -12,13 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class RequestConfig:
-    """Configuration for HTTP requests.
+    """Configuration settings for HTTP/HTTPS requests.
+
+    Controls the behavior of outgoing HTTP requests including timeouts,
+    SSL verification, and redirect handling.
 
     Attributes:
-        timeout (int): Request timeout in seconds
-        verify_ssl (bool): Whether to verify SSL certificates
-        follow_redirects (bool): Whether to follow redirects
-        max_redirects (int): Maximum number of redirects to follow
+        timeout (int): Maximum time in seconds to wait for server response
+        verify_ssl (bool): SSL certificate verification flag
+        follow_redirects (bool): Whether to automatically follow HTTP redirects
+        max_redirects (int): Maximum number of redirects to follow before failing
+
+    Example:
+        config = RequestConfig(
+            timeout=60,
+            verify_ssl=False,
+            follow_redirects=True,
+            max_redirects=5
+        )
     """
 
     def __init__(self, timeout: int = 30, verify_ssl: bool = True, follow_redirects: bool = True, max_redirects: int = 10):
@@ -29,20 +40,37 @@ class RequestConfig:
 
 
 class ConnectionManager:
-    """Manages HTTP connections with proxy support and rotation.
+    """Manages HTTP connections with advanced proxy support and rotation.
 
+    Provides a high-level interface for making HTTP requests with features like:
+    - Proxy rotation and health checking
+    - Custom header management
+    - Support for both direct and bridge proxy connections
+    - Automatic request retries and failover
+    
     Attributes:
-        proxy_pool (List[Proxy]): List of available proxies
-        request_config (RequestConfig): Default request configuration
-        proxy_checks (List[ProxyChecks]): List of checks to perform on proxies
+        proxy_pool (List[Proxy]): Available proxy servers for rotation
+        request_config (RequestConfig): Global request settings
+        _proxy_checks (List[ProxyChecks]): Active proxy health check configurations
+        _rotation_count (Dict[str, int]): Tracks proxy usage for rotation
+        _current_proxy_idx (int): Index of current proxy in pool
+        _custom_user_agent (Optional[str]): Custom User-Agent header if set
     """
 
     def __init__(self, proxy_pool: Optional[List[Proxy]] = None, request_config: Optional[RequestConfig] = None):
-        """Initialize the connection manager.
+        """Initialize the connection manager with proxy and request settings.
 
         Args:
-            proxy_pool: List of proxy configurations
-            request_config: Request configuration settings
+            proxy_pool: List of proxy servers to use for requests. If None, direct
+                      connections will be used.
+            request_config: Global request configuration settings. If None, default
+                          settings will be used.
+
+        Example:
+            manager = ConnectionManager(
+                proxy_pool=[Proxy(url="http://proxy:8080")],
+                request_config=RequestConfig(timeout=30)
+            )
         """
         self.proxy_pool: List[Proxy] = proxy_pool or []
         self.request_config = request_config or RequestConfig(
@@ -69,7 +97,10 @@ class ConnectionManager:
     # @context: Setters
     def set_user_agent(self, user_agent: Optional[str]) -> None:
         """Set a custom User-Agent header.
-
+        
+        This will override the default User-Agent header.
+        If None is provided, the default User-Agent will be used.
+        
         Args:
             user_agent: User agent string or None to use default
 
@@ -102,18 +133,29 @@ class ConnectionManager:
 
     # @context: Public
     async def post(self, url: str, payload: dict) -> httpx.Response:
-        """Make a POST request with optional proxy routing.
+        """Send HTTP POST request with automatic proxy handling.
+
+        Makes a POST request to the specified URL using the configured proxy
+        settings and rotation strategy. Automatically handles both direct and
+        bridge proxy connections.
 
         Args:
-            url: Target URL
-            payload: Request payload
+            url: Target URL for the POST request
+            payload: Data to send in request body (will be JSON encoded)
 
         Returns:
-            Response from the server
+            httpx.Response: Server response with status, headers, and body
 
         Raises:
-            BridgeException: If bridge request fails
-            httpx.RequestError: For other request failures
+            BridgeException: When bridge proxy request fails
+            httpx.RequestError: On network or protocol errors
+            ValueError: If URL is malformed
+
+        Example:
+            response = await manager.post(
+                "https://api.example.com/data",
+                {"key": "value"}
+            )
         """
         self._validate_url(url)
         proxy = await self._get_proxy()
@@ -130,11 +172,15 @@ class ConnectionManager:
             url: Target URL
 
         Returns:
-            Response from the server
+            httpx.Response: Server response with status, headers, and body
 
         Raises:
             BridgeException: If bridge request fails
             httpx.RequestError: For other request failures
+            ValueError: If URL is malformed
+
+        Example:
+            response = await manager.get("https://api.example.com/data")
         """
         self._validate_url(url)
         proxy = await self._get_proxy()
@@ -149,7 +195,7 @@ class ConnectionManager:
         """Get request headers with optional custom User-Agent.
 
         Returns:
-            Dict of HTTP headers
+            Dict[str, str]: HTTP headers for the request
         """
         headers = self._default_headers.copy()
         headers["User-Agent"] = (
@@ -180,7 +226,7 @@ class ConnectionManager:
         """Get next valid proxy from pool with rotation support.
 
         Returns:
-            Selected proxy configuration
+            Proxy: Selected proxy configuration
 
         Note:
             Returns NONE type proxy if no valid proxies are available
@@ -225,7 +271,7 @@ class ConnectionManager:
             response: Raw response from bridge proxy
 
         Returns:
-            Processed response object
+            httpx.Response: Processed response object
 
         Raises:
             BridgeException: If response processing fails
@@ -253,7 +299,7 @@ class ConnectionManager:
             proxy: Proxy configuration
 
         Returns:
-            Server response
+            httpx.Response: Server response
 
         Raises:
             httpx.RequestError: On request failure
@@ -284,7 +330,7 @@ class ConnectionManager:
             proxy: Bridge proxy configuration
 
         Returns:
-            Processed response
+            httpx.Response: Processed response
 
         Raises:
             BridgeException: If bridge request fails
@@ -313,7 +359,7 @@ class ConnectionManager:
             proxy: Proxy configuration
 
         Returns:
-            Server response
+            httpx.Response: Server response
 
         Raises:
             httpx.RequestError: On request failure
@@ -342,7 +388,7 @@ class ConnectionManager:
             proxy: Bridge proxy configuration
 
         Returns:
-            Processed response
+            httpx.Response: Processed response
 
         Raises:
             BridgeException: If bridge request fails

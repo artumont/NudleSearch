@@ -82,10 +82,10 @@ class DatabaseManager:
             )
             self.connection.execute("PRAGMA foreign_keys = ON")
             logger.info("Connected to the database.")
+            return True
         except sqlite3.Error as e:
             logger.error(f"Failed to connect to the database: {e}")
-            raise SQLiteConnectionException(
-                f"Failed to connect to the database: {e}")
+            return False
 
     def _ensure_schema(self) -> None:
         """Initialize or validate the database schema.
@@ -158,18 +158,25 @@ class DatabaseManager:
             sqlite3.Cursor: Database cursor for executing SQL commands.
 
         Raises:
-            sqlite3.Error: If any database operation within the transaction fails.
+            SQLiteConnectionException: If database connection cannot be established or is invalid
+            sqlite3.Error: If any database operation within the transaction fails
         """
-        if not self.connection:
-            self._connect()
+        if not self.connection and not self._connect():
+            raise SQLiteConnectionException("Failed to establish database connection")
+
+        if not isinstance(self.connection, sqlite3.Connection):
+            raise SQLiteConnectionException("Invalid database connection state")
 
         cursor = self.connection.cursor()
         try:
             yield cursor
-            self.connection.commit()
+            if self.connection:
+                self.connection.commit()
         except sqlite3.Error as e:
-            self.connection.rollback()
+            if self.connection:
+                self.connection.rollback()
             logger.error(f"Transaction failed: {e}")
             raise
         finally:
-            cursor.close()
+            if cursor:
+                cursor.close()

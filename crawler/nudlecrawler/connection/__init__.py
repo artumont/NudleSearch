@@ -5,7 +5,7 @@ from typing import List, Optional, Dict
 from urllib.parse import urlparse
 from nudlecrawler.connection.exceptions import BridgeException
 from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType
-from nudlecrawler.connection.types import Response, RequestConfig
+from nudlecrawler.connection.models import Response, RequestConfig
 
 logger = logging.getLogger(__name__)
 

@@ -162,10 +162,12 @@ class DatabaseManager:
             sqlite3.Error: If any database operation within the transaction fails
         """
         if not self.connection and not self._connect():
-            raise SQLiteConnectionException("Failed to establish database connection")
+            raise SQLiteConnectionException(
+                "Failed to establish database connection")
 
         if not isinstance(self.connection, sqlite3.Connection):
-            raise SQLiteConnectionException("Invalid database connection state")
+            raise SQLiteConnectionException(
+                "Invalid database connection state")
 
         cursor = self.connection.cursor()
         try:

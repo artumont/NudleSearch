@@ -46,7 +46,7 @@ class ConnectionManager:
     - Custom header management
     - Support for both direct and bridge proxy connections
     - Automatic request retries and failover
-    
+
     Attributes:
         proxy_pool (List[Proxy]): Available proxy servers for rotation
         request_config (RequestConfig): Global request settings
@@ -96,10 +96,10 @@ class ConnectionManager:
     # @context: Setters
     def set_user_agent(self, user_agent: Optional[str]) -> None:
         """Set a custom User-Agent header.
-        
+
         This will override the default User-Agent header.
         If None is provided, the default User-Agent will be used.
-        
+
         Args:
             user_agent: User agent string or None to use default
 
@@ -124,7 +124,7 @@ class ConnectionManager:
         """
         if not isinstance(checks, list) and all(isinstance(check, ProxyChecks) for check in checks):
             raise ValueError("Proxy checks must be a list of ProxyChecks")
-        
+
         self._proxy_checks = checks
         logger.debug(f"Proxy checks set to: {checks}")
 

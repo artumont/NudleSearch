@@ -38,10 +38,12 @@ class ConnectionManager:
                           settings will be used.
 
         Example:
+            ```
             manager = ConnectionManager(
                 proxy_pool=[Proxy(url="http://proxy:8080")],
                 request_config=RequestConfig(timeout=30)
             )
+            ```
         """
         self.proxy_pool: List[Proxy] = proxy_pool or []
         self.request_config = request_config or RequestConfig(
@@ -121,10 +123,12 @@ class ConnectionManager:
             ValueError: If URL is malformed
 
         Example:
+            ```
             response = await manager.post(
                 "https://api.example.com/data",
                 {"key": "value"}
             )
+            ```
         """
         self._validate_url(url)
         proxy = await self._get_proxy()
@@ -149,7 +153,9 @@ class ConnectionManager:
             ValueError: If URL is malformed
 
         Example:
+            ```
             response = await manager.get("https://api.example.com/data")
+            ```
         """
         self._validate_url(url)
         proxy = await self._get_proxy()

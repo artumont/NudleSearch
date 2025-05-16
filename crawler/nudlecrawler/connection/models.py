@@ -38,12 +38,14 @@ class RequestConfig:
         max_redirects (int): Maximum number of redirects to follow before failing
 
     Example:
+        ```
         config = RequestConfig(
             timeout=60,
             verify_ssl=False,
             follow_redirects=True,
             max_redirects=5
         )
+        ```
     """
 
     def __init__(self, timeout: int = 30, verify_ssl: bool = True, follow_redirects: bool = True, max_redirects: int = 10):

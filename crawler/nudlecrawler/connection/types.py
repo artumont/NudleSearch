@@ -10,7 +10,7 @@ class Response:
         json (dict, optional): JSON decoded data if the response contains JSON. Defaults to None.
     """
 
-    def __init__(self, status_code, headers: dict, content: bytes, text: str = None, html: str = None, json: dict = None):
+    def __init__(self, status_code, headers: dict, content: bytes, text: str = "", html: str = "", json: dict = {}):
         self.status_code = status_code
         self.headers = headers
         self.content = content

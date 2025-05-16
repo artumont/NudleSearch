@@ -1,11 +1,10 @@
 import os
 import httpx
 import logging
-import asyncio
 from typing import List, Optional, Dict
 from urllib.parse import urlparse
 from nudlecrawler.connection.exceptions import BridgeException
-from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType, UseCases
+from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType
 from nudlecrawler.connection.types import Response
 
 logger = logging.getLogger(__name__)
@@ -107,7 +106,7 @@ class ConnectionManager:
         Raises:
             ValueError: If user_agent is neither string nor None
         """
-        if user_agent is not None and not isinstance(user_agent, str):
+        if user_agent is not None:
             raise ValueError("User agent must be a string or None")
 
         self._custom_user_agent = user_agent
@@ -123,16 +122,14 @@ class ConnectionManager:
         Raises:
             ValueError: If checks is not a list
         """
-        if not isinstance(checks, list):
-            raise ValueError("Proxy checks must be a list")
-        if not all(isinstance(check, ProxyChecks) for check in checks):
-            raise ValueError("All checks must be ProxyChecks enum values")
-
+        if not isinstance(checks, list) and all(isinstance(check, ProxyChecks) for check in checks):
+            raise ValueError("Proxy checks must be a list of ProxyChecks")
+        
         self._proxy_checks = checks
         logger.debug(f"Proxy checks set to: {checks}")
 
     # @context: Public
-    async def post(self, url: str, payload: dict) -> httpx.Response:
+    async def post(self, url: str, payload: Dict[str, str]) -> httpx.Response | Response:
         """Send HTTP POST request with automatic proxy handling.
 
         Makes a POST request to the specified URL using the configured proxy
@@ -165,7 +162,7 @@ class ConnectionManager:
         else:
             return await self._post_normal(url, payload, proxy)
 
-    async def get(self, url: str) -> httpx.Response:
+    async def get(self, url: str) -> httpx.Response | Response:
         """Make a GET request with optional proxy routing.
 
         Args:
@@ -252,7 +249,7 @@ class ConnectionManager:
                 self._rotation_count[current_proxy.url] = 0
 
             # @logic: Verify proxy health
-            if self._proxy_checks and not await current_proxy.perform_checks(self._proxy_checks):
+            if self._proxy_checks and not await current_proxy.perform_checks(current_proxy, self._proxy_checks):
                 self._current_proxy_idx = (
                     self._current_proxy_idx + 1) % len(self.proxy_pool)
                 proxies_checked += 1
@@ -264,7 +261,7 @@ class ConnectionManager:
             "No valid proxies available, falling back to direct connection")
         return Proxy(url="http://0.0.0.0:0000", type=ProxyType.NONE)
 
-    def _create_bridge_response(self, response: httpx.Response) -> httpx.Response:
+    def _create_bridge_response(self, response: httpx.Response) -> Response:
         """Create response object from bridge proxy response.
 
         Args:
@@ -280,7 +277,7 @@ class ConnectionManager:
             json_response = response.json()
             return Response(
                 status_code=response.status_code,
-                headers=response.headers,
+                headers=dict(response.headers),
                 content=json_response.get('content', b''),
                 text=json_response.get('text', ''),
                 html=json_response.get('html', ''),
@@ -321,7 +318,7 @@ class ConnectionManager:
                 headers=self._get_headers()
             )
 
-    async def _post_bridge(self, url: str, payload: dict, proxy: Proxy) -> httpx.Response:
+    async def _post_bridge(self, url: str, payload: Dict[str, str], proxy: Proxy) -> Response:
         """Make POST request through bridge proxy.
 
         Args:
@@ -380,7 +377,7 @@ class ConnectionManager:
                 headers=self._get_headers()
             )
 
-    async def _get_bridge(self, url: str, proxy: Proxy) -> httpx.Response:
+    async def _get_bridge(self, url: str, proxy: Proxy) -> Response:
         """Make GET request through bridge proxy.
 
         Args:

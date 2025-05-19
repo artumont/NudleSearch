@@ -6,10 +6,10 @@ import flask
 import httpx
 import pytest
 from werkzeug.serving import make_server
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 from nudlecrawler.connection import ConnectionManager, RequestConfig
 from nudlecrawler.connection.exceptions import BridgeException
-from nudlecrawler.connection.proxy import Proxy, ProxyChecks, ProxyType, UseCases, RotationConfig
+from nudlecrawler.connection.proxy import Proxy, ProxyType, UseCases, RotationConfig
 
 os.environ.setdefault("TIMEOUT", "5")
 
@@ -112,7 +112,7 @@ async def test_get_disabled_success(mock_async_client_cls, mock_response, mock_a
     response = await manager.get(url)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok"} # type: ignore
     mock_async_client.get.assert_called_once_with(
         url=url,
         headers=manager._get_headers()
@@ -157,7 +157,7 @@ async def test_get_static_success(mock_async_client_cls, mock_response, mock_asy
     response = await manager.get(url)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok_static"}
+    assert response.json() == {"status": "ok_static"} # type: ignore
 
 
 @pytest.mark.asyncio
@@ -216,7 +216,7 @@ async def test_get_rotating_success(mock_async_client_cls, mock_response, mock_a
     response = await manager.get(url)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok_rotating"}
+    assert response.json() == {"status": "ok_rotating"} # type: ignore
 
     assert manager._current_proxy_idx == 1
     assert manager._rotation_count[proxies[0].url] == 0
@@ -289,7 +289,7 @@ async def test_get_rotating_no_working_proxies(mock_async_client_cls, mock_respo
     assert response.status_code == 200
 
     for proxy in proxies:
-        proxy.perform_checks.assert_called_once()
+        proxy.perform_checks.assert_called_once() # type: ignore
 
 
 @pytest.mark.asyncio
@@ -311,7 +311,7 @@ async def test_get_bridge_success(live_bridge_server):
     assert response.status_code == 200
     assert response.content == "Mocked data from live bridge"
     assert response.text == "Mocked text from live bridge"
-    assert response.html == "Mocked HTML from live bridge"
+    assert response.html == "Mocked HTML from live bridge" # type: ignore
 
 
 @pytest.mark.asyncio

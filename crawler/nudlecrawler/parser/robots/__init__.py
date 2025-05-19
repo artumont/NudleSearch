@@ -102,7 +102,7 @@ class RobotsParser:
         if agent not in self._rules_map:
             self._rules_map[agent] = RobotRules(agent)
 
-        # If last line wasn't User-agent, clear the current agents list
+        # @note: If last line wasn't User-agent, clear the current agents list
         if not (hasattr(self, '_last_directive') and self._last_directive == "user-agent"):
             self._current_agents = []
 

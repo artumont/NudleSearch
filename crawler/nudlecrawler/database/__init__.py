@@ -62,7 +62,7 @@ class DatabaseManager:
 
     # @context: Public
 
-    # @todo: Implement a database methods
+    # @todo: Implement database methods
     
     # @context: Private
     def _connect(self) -> bool:

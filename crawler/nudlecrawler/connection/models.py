@@ -1,3 +1,6 @@
+from typing import Dict
+
+
 class Response:
     """A class representing a response from an HTTP request.
 
@@ -10,13 +13,13 @@ class Response:
         json (dict, optional): JSON decoded data if the response contains JSON. Defaults to None.
     """
 
-    def __init__(self, status_code, headers: dict, content: bytes, text: str = "", html: str = "", json: dict = {}):
-        self.status_code = status_code
-        self.headers = headers
-        self.content = content
-        self.text = text
-        self.html = html
-        self.json = json
+    def __init__(self, status_code, headers: Dict[str, str], content: bytes, text: str = "", html: str = "", json: dict = {}):
+        self.status_code: int = status_code
+        self.headers: Dict[str, str] = headers
+        self.content: bytes = content
+        self.text: str = text
+        self.html: str = html
+        self.json: dict = json
 
     def __repr__(self):
         return f"<Response status_code={self.status_code} headers={self.headers} content={self.content} text={self.text} html={self.html} json={self.json}>"
@@ -49,7 +52,7 @@ class RequestConfig:
     """
 
     def __init__(self, timeout: int = 30, verify_ssl: bool = True, follow_redirects: bool = True, max_redirects: int = 10):
-        self.timeout = timeout
-        self.verify_ssl = verify_ssl
-        self.follow_redirects = follow_redirects
-        self.max_redirects = max_redirects
+        self.timeout: int = timeout
+        self.verify_ssl: bool = verify_ssl
+        self.follow_redirects: bool = follow_redirects
+        self.max_redirects: int = max_redirects

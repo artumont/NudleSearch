@@ -46,7 +46,7 @@ class ConnectionManager:
             ```
         """
         self.proxy_pool: List[Proxy] = proxy_pool or []
-        self.request_config = request_config or RequestConfig(
+        self.request_config: RequestConfig = request_config or RequestConfig(
             timeout=int(os.getenv("TIMEOUT", 30))
         )
 
@@ -61,7 +61,7 @@ class ConnectionManager:
 
         # @params: Headers
         self._custom_user_agent: Optional[str] = None
-        self._default_headers = {
+        self._default_headers: Dict[str, str] = {
             "Accept-Language": "en-US,en;q=0.5",
             "Connection": "keep-alive",
             "Accept": "*/*"

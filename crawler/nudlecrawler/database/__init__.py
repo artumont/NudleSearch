@@ -62,6 +62,8 @@ class DatabaseManager:
 
     # @context: Public
 
+    # @todo: Implement a database methods
+    
     # @context: Private
     def _connect(self) -> bool:
         """Establish a connection to the SQLite database.

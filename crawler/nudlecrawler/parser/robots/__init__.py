@@ -55,6 +55,7 @@ class RobotsParser:
         Returns:
             RobotRules: Rules that apply to the specified user agent
         """
+        user_agent = user_agent.lower()
         if user_agent in self._rules_map:
             return self._rules_map[user_agent]
 

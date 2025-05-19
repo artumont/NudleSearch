@@ -22,6 +22,7 @@ class RobotsParser:
         self._rules_map: Dict[str, RobotRules] = {}
         self._current_agents: List[str] = []
 
+    # @context: Public
     def parse(self, content: str) -> Dict[str, RobotRules]:
         """Parse robots.txt content and return rules for all user agents.
 
@@ -60,6 +61,7 @@ class RobotsParser:
         # @note: Fallback to default rules
         return self._rules_map.get("*", RobotRules(user_agent))
 
+    # @context: Private
     def _parse_line(self, line: str) -> None:
         """Parse a single line from robots.txt.
 
@@ -90,13 +92,25 @@ class RobotsParser:
 
         Args:
             agent (str): User agent string
+
+        Note:
+            This method supports consecutive User-agent directives by maintaining
+            a list of current agents. Each User-agent directive adds to this list
+            until a non-User-agent directive is encountered.
         """
         agent = agent.lower()
         if agent not in self._rules_map:
             self._rules_map[agent] = RobotRules(agent)
-        self._current_agents = [agent]
+
+        # If last line wasn't User-agent, clear the current agents list
+        if not (hasattr(self, '_last_directive') and self._last_directive == "user-agent"):
+            self._current_agents = []
+
+        self._current_agents.append(agent)
+        self._last_directive = "user-agent"
 
     def _handle_disallow(self, path: str) -> None:
+        self._last_directive = "disallow"
         """Handle a Disallow line in robots.txt.
 
         Args:
@@ -112,6 +126,7 @@ class RobotsParser:
                 continue
 
     def _handle_allow(self, path: str) -> None:
+        self._last_directive = "allow"
         """Handle an Allow line in robots.txt.
 
         Args:
@@ -127,6 +142,7 @@ class RobotsParser:
                 continue
 
     def _handle_sitemap(self, url: str) -> None:
+        self._last_directive = "sitemap"
         """Handle a Sitemap line in robots.txt.
 
         Args:

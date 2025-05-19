@@ -128,7 +128,7 @@ async def test_post_disabled_success(mock_async_client_cls, mock_response, mock_
     response = await manager.post(url, data)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok"} # type: ignore
     mock_async_client.post.assert_called_once_with(
         url=url,
         headers=manager._get_headers(),
@@ -176,7 +176,7 @@ async def test_post_static_success(mock_async_client_cls, mock_response, mock_as
     response = await manager.post(url, data)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok_static"}
+    assert response.json() == {"status": "ok_static"} # type: ignore
 
 
 @pytest.mark.asyncio
@@ -237,7 +237,7 @@ async def test_post_rotating_success(mock_async_client_cls, mock_response, mock_
     response = await manager.post(url, data)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok_rotating"}
+    assert response.json() == {"status": "ok_rotating"} # type: ignore
 
     assert manager._current_proxy_idx == 1
     assert manager._rotation_count[proxies[0].url] == 0
@@ -312,7 +312,7 @@ async def test_post_rotating_no_working_proxies(mock_async_client_cls, mock_resp
     assert response.status_code == 200
 
     for proxy in proxies:
-        proxy.perform_checks.assert_called_once()
+        proxy.perform_checks.assert_called_once() # type: ignore
 
 
 @pytest.mark.asyncio
@@ -335,7 +335,7 @@ async def test_post_bridge_success(live_bridge_server):
     assert response.status_code == 200
     assert response.content == "Mocked data from live bridge"
     assert response.text == "Mocked text from live bridge"
-    assert response.html == "Mocked HTML from live bridge"
+    assert response.html == "Mocked HTML from live bridge" # type: ignore
     assert response.json == payload_for_target_url
 
 
